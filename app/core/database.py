@@ -1,5 +1,7 @@
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 
 DATABASE_URL = "sqlite:///./app.db"
 
@@ -21,3 +23,12 @@ def get_db():
         yield db
     finally:
         db.close()
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    except Exception:
+        pass

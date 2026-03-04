@@ -2,11 +2,12 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-
+from app.core.deps import get_current_user
 from app.core.database import get_db
 from app.repositories.todo_repo import ToDoRepository
 from app.schemas.todo import ToDoCreate, ToDoListResponse, ToDoOut, ToDoPatch, ToDoUpdate
 from app.services.todo_service import ToDoService
+from app.models.user import User
 
 router = APIRouter(prefix="/todos", tags=["todos"])
 
@@ -22,8 +23,12 @@ def _get_or_404(db: Session, todo_id: int):
 
 
 @router.post("", response_model=ToDoOut, status_code=201)
-def create_todo(payload: ToDoCreate, db: Session = Depends(get_db)):
-    return _service.create(db, payload)
+def create_todo(
+    payload: ToDoCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return _service.create(db, payload, owner_id=current_user.id)
 
 
 @router.get("", response_model=ToDoListResponse)
@@ -39,8 +44,15 @@ def list_todos(
 
 
 @router.get("/{todo_id}", response_model=ToDoOut)
-def get_todo(todo_id: int, db: Session = Depends(get_db)):
-    return _get_or_404(db, todo_id)
+def get_todo(
+    todo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    todo = _service.get(db, todo_id, owner_id=current_user.id)
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    return todo
 
 
 @router.put("/{todo_id}", response_model=ToDoOut)

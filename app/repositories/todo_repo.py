@@ -19,8 +19,10 @@ class ToDoRepository:
         db.refresh(todo)
         return todo
 
-    def get_by_id(self, db: Session, todo_id: int) -> Optional[ToDo]:
-        return db.execute(select(ToDo).where(ToDo.id == todo_id)).scalar_one_or_none()
+    def get_by_id(self, db: Session, todo_id: int, owner_id: int) -> Optional[ToDo]:
+        return db.execute(
+            select(ToDo).where(ToDo.id == todo_id, ToDo.owner_id == owner_id)
+    ).scalar_one_or_none()
 
     def delete(self, db: Session, todo: ToDo) -> None:
         db.delete(todo)
@@ -58,7 +60,7 @@ class ToDoRepository:
         q: Optional[str],
         sort: str,
     ) -> tuple[Sequence[ToDo], int]:
-        stmt = select(ToDo)
+        stmt = select(ToDo).where(ToDo.owner_id == owner_id)
 
         if is_done is not None:
             stmt = stmt.where(ToDo.is_done == is_done)
