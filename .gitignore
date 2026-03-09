@@ -1,0 +1,3 @@
+# Tests
+.pytest_cache/
+test.db
