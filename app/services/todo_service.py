@@ -2,36 +2,62 @@ from typing import Literal, Optional
 
 from sqlalchemy.orm import Session
 
+from app.repositories.tag_repo import TagRepository
 from app.repositories.todo_repo import ToDoRepository
-from app.schemas.todo import ToDoCreate, ToDoListResponse, ToDoPatch, ToDoUpdate
+from app.schemas.todo import ToDoCreate, ToDoListResponse, ToDoOut, ToDoPatch, ToDoUpdate
+
+
+def _to_out(todo) -> ToDoOut:
+    return ToDoOut(
+        id=todo.id,
+        title=todo.title,
+        description=todo.description,
+        is_done=todo.is_done,
+        due_date=todo.due_date,
+        tags=[t.name for t in (todo.tags or [])],
+        created_at=todo.created_at,
+        updated_at=todo.updated_at,
+    )
 
 
 class ToDoService:
-    def __init__(self, repo: ToDoRepository) -> None:
+    def __init__(self, repo: ToDoRepository, tag_repo: TagRepository) -> None:
         self.repo = repo
+        self.tag_repo = tag_repo
 
-    def create(self, db: Session, payload: ToDoCreate):
-        return self.repo.create(db, payload)
+    def create(self, db: Session, payload: ToDoCreate, owner_id: int) -> ToDoOut:
+        tags = self.tag_repo.get_or_create_many(db, owner_id=owner_id, names=payload.tags or [])
+        todo = self.repo.create(db, payload, owner_id, tags)
+        return _to_out(todo)
 
-    def get(self, db: Session, todo_id: int):
-        return self.repo.get_by_id(db, todo_id)
+    def get(self, db: Session, todo_id: int, owner_id: int) -> Optional[ToDoOut]:
+        todo = self.repo.get_by_id(db, todo_id, owner_id)
+        return _to_out(todo) if todo else None
 
     def delete(self, db: Session, todo) -> None:
         self.repo.delete(db, todo)
 
-    def replace(self, db: Session, todo, payload: ToDoUpdate):
-        return self.repo.replace(db, todo, payload)
+    def replace(self, db: Session, todo, payload: ToDoUpdate, owner_id: int) -> ToDoOut:
+        tags = self.tag_repo.get_or_create_many(db, owner_id=owner_id, names=payload.tags or [])
+        todo = self.repo.replace(db, todo, payload, tags)
+        return _to_out(todo)
 
-    def patch(self, db: Session, todo, payload: ToDoPatch):
-        return self.repo.patch(db, todo, payload)
+    def patch(self, db: Session, todo, payload: ToDoPatch, owner_id: int) -> ToDoOut:
+        tags = None
+        if payload.tags is not None:
+            tags = self.tag_repo.get_or_create_many(db, owner_id=owner_id, names=payload.tags)
+        todo = self.repo.patch(db, todo, payload, tags)
+        return _to_out(todo)
 
-    def complete(self, db: Session, todo):
-        return self.repo.complete(db, todo)
+    def complete(self, db: Session, todo) -> ToDoOut:
+        todo = self.repo.complete(db, todo)
+        return _to_out(todo)
 
     def list(
         self,
         db: Session,
         *,
+        owner_id: int,
         limit: int,
         offset: int,
         is_done: Optional[bool],
@@ -39,6 +65,19 @@ class ToDoService:
         sort: Literal["created_at", "-created_at"],
     ) -> ToDoListResponse:
         items, total = self.repo.list(
-            db, limit=limit, offset=offset, is_done=is_done, q=q, sort=sort
+            db, owner_id=owner_id, limit=limit, offset=offset, is_done=is_done, q=q, sort=sort
         )
-        return ToDoListResponse(items=items, total=total, limit=limit, offset=offset)
+        return ToDoListResponse(
+            items=[_to_out(t) for t in items],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    def overdue(self, db: Session, *, owner_id: int, limit: int, offset: int) -> ToDoListResponse:
+        items, total = self.repo.list_overdue(db, owner_id=owner_id, limit=limit, offset=offset)
+        return ToDoListResponse(items=[_to_out(t) for t in items], total=total, limit=limit, offset=offset)
+
+    def today(self, db: Session, *, owner_id: int, limit: int, offset: int) -> ToDoListResponse:
+        items, total = self.repo.list_today(db, owner_id=owner_id, limit=limit, offset=offset)
+        return ToDoListResponse(items=[_to_out(t) for t in items], total=total, limit=limit, offset=offset)

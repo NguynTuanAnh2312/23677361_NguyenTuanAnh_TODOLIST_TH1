@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import List
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -17,9 +20,16 @@ class ToDo(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow
-    )
+    due_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    tags: Mapped[List["Tag"]] = relationship(
+        "Tag",
+        secondary="todo_tags",
+        back_populates="todos",
+        lazy="selectin",
     )

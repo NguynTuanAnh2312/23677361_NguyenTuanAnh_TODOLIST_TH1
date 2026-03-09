@@ -8,11 +8,13 @@ from app.repositories.todo_repo import ToDoRepository
 from app.schemas.todo import ToDoCreate, ToDoListResponse, ToDoOut, ToDoPatch, ToDoUpdate
 from app.services.todo_service import ToDoService
 from app.models.user import User
+from app.repositories.tag_repo import TagRepository
 
 router = APIRouter(prefix="/todos", tags=["todos"])
 
 _repo = ToDoRepository()
-_service = ToDoService(_repo)
+_tag_repo = TagRepository()
+_service = ToDoService(_repo, _tag_repo)
 
 
 def _get_or_404(db: Session, todo_id: int):
@@ -78,3 +80,22 @@ def delete_todo(todo_id: int, db: Session = Depends(get_db)):
     todo = _get_or_404(db, todo_id)
     _service.delete(db, todo)
     return None
+
+@router.get("/overdue", response_model=ToDoListResponse)
+def overdue_todos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    return _service.overdue(db, owner_id=current_user.id, limit=limit, offset=offset)
+
+
+@router.get("/today", response_model=ToDoListResponse)
+def today_todos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    return _service.today(db, owner_id=current_user.id, limit=limit, offset=offset)
