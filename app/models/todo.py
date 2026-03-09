@@ -33,3 +33,5 @@ class ToDo(Base):
         back_populates="todos",
         lazy="selectin",
     )
+
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)

@@ -26,12 +26,17 @@ class ToDoRepository:
         return todo
 
     def get_by_id(self, db: Session, todo_id: int, owner_id: int) -> Optional[ToDo]:
-        stmt = select(ToDo).where(ToDo.id == todo_id, ToDo.owner_id == owner_id)
+        stmt = select(ToDo).where(
+        ToDo.id == todo_id,
+        ToDo.owner_id == owner_id,
+        ToDo.deleted_at.is_(None),
+    )
         return db.execute(stmt).scalar_one_or_none()
 
     def delete(self, db: Session, todo: ToDo) -> None:
-        db.delete(todo)
+        todo.deleted_at = datetime.now(timezone.utc)
         db.commit()
+        db.refresh(todo)
 
     def replace(self, db: Session, todo: ToDo, payload: ToDoUpdate, tags: Sequence[Tag]) -> ToDo:
         todo.title = payload.title
@@ -81,7 +86,7 @@ class ToDoRepository:
         q: Optional[str],
         sort: str,
     ) -> tuple[Sequence[ToDo], int]:
-        stmt = select(ToDo).where(ToDo.owner_id == owner_id)
+        stmt = select(ToDo).where(ToDo.owner_id == owner_id, ToDo.deleted_at.is_(None))
 
         if is_done is not None:
             stmt = stmt.where(ToDo.is_done == is_done)
@@ -106,6 +111,7 @@ class ToDoRepository:
             select(ToDo)
             .where(
                 ToDo.owner_id == owner_id,
+                ToDo.deleted_at.is_(None),
                 ToDo.is_done == False,  # noqa: E712
                 ToDo.due_date.is_not(None),
                 ToDo.due_date < now,
@@ -126,6 +132,7 @@ class ToDoRepository:
             select(ToDo)
             .where(
                 ToDo.owner_id == owner_id,
+                ToDo.deleted_at.is_(None),
                 ToDo.due_date.is_not(None),
                 ToDo.due_date >= start,
                 ToDo.due_date < end,
